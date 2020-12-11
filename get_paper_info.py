@@ -1,5 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
+import convert_labels
+import get_function_map
 
 
 def which_journal(url):
@@ -11,13 +13,17 @@ def which_journal(url):
 
     return publisher
 
+
 class PaperInfo(object):
     # Abstract class for all of the
-    def __init__(self, url):
+    def __init__(self, url, orig_functions, function_map):
         self.url = url
         self.html = self.get_html()
         self.soup = BeautifulSoup(self.html, 'html.parser')
         self.pdf_link = None
+        self.orig_functions = orig_functions
+        self.function_map = get_function_map.get_function_map(function_map)
+        self.new_functions = convert_labels.convert_labels(function_map, self.orig_functions)
 
     def get_html(self):
         # use request module to get HTML from the Webpage at self.url
@@ -47,6 +53,15 @@ class PaperInfo(object):
             self.pdf_link = self.get_full_doc_link()
         r = requests.get(self.pdf_link)
         return r.ok
+
+    def get_label_one(self):
+        return self.new_functions[0]
+
+    def get_label_two(self):
+        return self.new_functions[1]
+
+    def get_label_three(self):
+        return self.new_functions[2]
 
 
 class PaperInfoNature(PaperInfo):
@@ -101,6 +116,7 @@ class PaperInfoJEB(PaperInfo):
 
         return pdf_link
 
+
 class PaperInfoSpringer(PaperInfo):
     def get_title(self):
         # given self.html, get the title
@@ -119,7 +135,7 @@ class PaperInfoSpringer(PaperInfo):
 
     def get_full_doc_link(self):
         # given self.html, get the full_doc_link
-        pdf_link = self.url.replace('chapter','content/pdf')+'.pdf'
+        pdf_link = self.url.replace('chapter', 'content/pdf')+'.pdf'
         return pdf_link
 
 
@@ -199,7 +215,6 @@ class PaperInfoPubMed(PaperInfo):
     #     pass
 
 
-
 paper_info_classes = {
     'pnas': PaperInfoPNAS,
     'pubmed': PaperInfoPubMed,
@@ -210,17 +225,22 @@ paper_info_classes = {
 }
 
 
-def get_paper_info(url):
-    #Determine the journal site name, and create corresponding object name
+def get_paper_info(url, orig_functions, function_map):
+    # Determine the journal site name, and create corresponding object name
     journal = which_journal(url)
     paper_info_class = paper_info_classes[journal]
-    paper_info_instance = paper_info_class(url)
+    paper_info_instance = paper_info_class(url, orig_functions, function_map)
 
-    #Retrieiving journal properties
+    # Retrieving journal properties
     title = paper_info_instance.get_title()
     doi = paper_info_instance.get_doi()
     abstract = paper_info_instance.get_abstract()
     full_doc_link = paper_info_instance.get_full_doc_link()
-    is_open_access = paper_info_instance.is_open_access(full_doc_link)
+    is_open_access = paper_info_instance.is_open_access()
 
-    return title, doi, abstract, full_doc_link, is_open_access
+    # Retrieving labels of each level
+    level_one = paper_info_instance.get_label_one()
+    level_two = paper_info_instance.get_label_two()
+    level_three = paper_info_instance.get_label_three()
+
+    return title, doi, abstract, full_doc_link, is_open_access, level_one, level_two, level_three
